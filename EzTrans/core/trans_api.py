@@ -40,7 +40,7 @@ def translate_bing(content):
         'to': 'zh-Hans'
     }
 
-    while 1:
+    while True:
         try:
             result = requests.post(url, data=data, headers=headers)
             break
