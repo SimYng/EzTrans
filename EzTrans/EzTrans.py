@@ -1,10 +1,13 @@
 # encoding=utf-8
+import threading    # 单独线程显示窗口
+import xerox        # 读取剪切板数据
+import keyboard     # 获取用户按下的按键
+import pyautogui    # 获取鼠标位置
+import time         # 获取击键的时间，实现双击ctrl+s开始翻译
+import tkinter      # 自带的GUI库，生成文本框
+import pywintypes   # 用于获得获取tkinter窗口句柄
+import win32gui     # 根据窗口句柄设置焦点
 
-import xerox  # 读取剪切板数据
-import keyboard  # 获取用户按下的按键
-import pyautogui  # 获取鼠标位置
-import time  # 获取击键的时间
-import tkinter  # 自带的GUI库，生成文本框
 
 if __name__ == '__main__':
     from core.trans_api import translators
@@ -13,9 +16,13 @@ else:
     from .core.trans_api import translators
     from .core.utils import re_split
 
+############################### 参数设置 ######################################
 ch_en_mode = True  # 中英对照模式
-
 translator_i = 2  # 当前翻译器index
+wnd_title = "EzTrans"
+wnd_class_name = "TkTopLevel"
+
+############################### 全局变量 ######################################
 translator_num = len(translators)  # 翻译器总数
 myTranslate = translators[translator_i]  # 初始化翻译器
 
@@ -24,16 +31,40 @@ lastClickTransTime = 0  # 上一次ctrl + c 时间
 nowClickTransTime = 0  # 现在ctrl + c 时间
 doubleClickInter = 0.5  # 双击的间隔时间
 
-# 窗口
 
+def run(translate_results):
+    # 弹出的翻译串口，键盘事件监听器
+    def detect_key_press(event):
+        # 空格事件触发对应的ASCII码:32
+        if event.keycode == 32:
+            # print(f"事件触发键盘输入:{event.char},对应的ASCII码:{event.keycode}")
+            top.destroy()
 
+    """
+    显示翻译结果
+    """
+    x, y = pyautogui.position()
 
-# 弹出的翻译串口，键盘事件监听器
-def xFunc1(event):
-    # 空格事件触发对应的ASCII码:32
-    print(f"事件触发键盘输入:{event.char},对应的ASCII码:{event.keycode}")
-    # if event.keycode == 32:
-    #     top.destroy()
+    position = "500x400+" + str(x) + "+" + str(y)  # 取得当前鼠标位置
+    top = tkinter.Tk()  # 窗口初始化
+    top.title(wnd_title)
+    top.wm_attributes('-topmost', 1)  # 置顶窗口
+    top.geometry(position)  # 指定定位生成指定大小窗口
+    top.configure(bg=('#%02x%02x%02x' % (199, 237, 204)))
+    e = tkinter.Text()  # 生成文本框部件
+    e.configure(bg=('#%02x%02x%02x' % (199, 237, 204)))
+    e.insert(1.0, translate_results)  # 插入数据
+    e.pack()  # 将部件打包进窗口
+    e.focus_set()
+    e.bind("<Key>", detect_key_press)  # 监听键盘按键事件，按下空格键后关闭窗口
+    # tkinter窗口需要用特殊的方式才能获得句柄
+    try:
+        hwnd = pywintypes.HANDLE(int(top.frame(), 16))  # 获取窗口句柄
+        win32gui.SetForegroundWindow(hwnd)              # 根据句柄设置焦点
+    except Exception as e:
+        print(e)
+
+    top.mainloop()  # 进入消息循环
 
 
 def get_copy_text():
@@ -56,7 +87,6 @@ def on_press(v_cmd):
     global myTranslate
     global lastClickTransTime
     global nowClickTransTime
-    # global top
 
     if v_cmd == 'translator':  # 切换翻译器
         translator_i = (translator_i + 1) % translator_num
@@ -121,21 +151,9 @@ def on_press(v_cmd):
         else:
             translate_results = translate_results.replace('。', '。\n\n')
 
-        """  显示  """
-        x, y = pyautogui.position()
-
-        position = "500x400+" + str(x) + "+" + str(y)  # 取得当前鼠标位置
-        top = tkinter.Tk()  # 窗口初始化
-        top.title("EZ Translator by SimYng")
-        top.wm_attributes('-topmost', 1)  # 置顶窗口
-        top.geometry(position)  # 指定定位生成指定大小窗口
-        top.configure(bg=('#%02x%02x%02x' % (199, 237, 204)))
-        e = tkinter.Text()  # 生成文本框部件
-        e.configure(bg=('#%02x%02x%02x' % (199, 237, 204)))
-        e.insert(1.0, translate_results)  # 插入数据
-        e.pack()  # 将部件打包进窗口
-        e.bind("<Key>", xFunc1)
-        top.mainloop()  # 进入消息循环
+        """  显示，单独开一个线程  """
+        threading.Thread(target=run, args=(translate_results,)).start()
+        # run(translate_results)
 
 
 def main():
